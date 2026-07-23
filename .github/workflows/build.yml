@@ -21,68 +21,10 @@ jobs:
     - name: Set up Android SDK
       uses: android-actions/setup-android@v3
 
-    - name: Inject MotionGram Core Modules
+    - name: Inject MotionGram Core
       run: |
-        # Копируем наши идеальные проверенные файлы ядра в системную структуру Telegram
         mkdir -p TMessagesProj/src/main/java/org/telegram/ui/Components/
         cp -r org/telegram/ui/Components/* TMessagesProj/src/main/java/org/telegram/ui/Components/
-        echo "[+] Локальные модули скопированы в исходный код."
-
-    - name: Connect Modules via Python Patcher
-      run: |
-        cat << 'PYEOF' > connect_modules.py
-        import os
-
-        print("Запуск жесткой интеграции модулей в ядро Telegram...")
-
-        # 1. Интеграция Терминала в отправку сообщений (ChatActivity)
-        target_chat = None
-        for root, dirs, files in os.walk("."):
-            if "ChatActivity.java" in files:
-                target_chat = os.path.join(root, "ChatActivity.java")
-                break
-                
-        if target_chat:
-            with open(target_chat, 'r', encoding='utf-8') as f:
-                code = f.read()
-            
-            hook_point = "protected void sendMessage("
-            if hook_point in code and "MotionTerminal" not in code:
-                patch = """
-                if (text != null && (text.startsWith("motion") || text.startsWith("pacman"))) {
-                    String res = org.telegram.ui.Components.MotionTerminal.executeCommand(text);
-                    showAlert(res); 
-                    return; 
-                }
-                """
-                code = code.replace("protected void sendMessage(String text,", "protected void sendMessage(String text,\n" + patch)
-                with open(target_chat, 'w', encoding='utf-8') as f:
-                    f.write(code)
-                print("[+] Арч-Терминал успешно вшит в ChatActivity.java")
-
-        # 2. Интеграция Анонимности в MessageObject
-        target_msg = None
-        for root, dirs, files in os.walk("."):
-            if "MessageObject.java" in files:
-                target_msg = os.path.join(root, "MessageObject.java")
-                break
-                
-        if target_msg:
-            with open(target_msg, 'r', encoding='utf-8') as f:
-                code = f.read()
-                
-            hook_point = "public CharSequence forwardUser;"
-            if hook_point in code and "MotionCryptoEngine" not in code:
-                patch = "public CharSequence forwardUser = org.telegram.ui.Components.MotionCryptoEngine.maskUserNickname();"
-                code = code.replace(hook_point, patch)
-                with open(target_msg, 'w', encoding='utf-8') as f:
-                    f.write(code)
-                print("[+] Рандомизатор ников 262sga₽# успешно вшит в MessageObject.java")
-
-        print("Жесткая связка компонентов завершена успешно.")
-        PYEOF
-        python3 connect_modules.py
-        rm connect_modules.py
 
     - name: Compile Monolith APK
       run: |
